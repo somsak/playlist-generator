@@ -28,7 +28,7 @@ stdin_parser.add_argument(
 )
 
 stdin_parser.add_argument(
-    '-i', '--input', help='input folder'
+    '-i', '--input', help='input folder or file. If it is a file, expect the list of URI of file in each line'
 )
 
 stdin_parser.add_argument(
@@ -139,6 +139,7 @@ def write_json(data):
 def main():
     source = ARGS.input if ARGS.input else CFG['storage']['path']
     length = ARGS.length if ARGS.length else CFG['playlist']['length']
+    day_start = CFG['playlist']['day_start']
     length_sec = str_to_sec(length)
     extensions = CFG['storage']['extensions']
     filler = CFG['storage']['filler_clip']
@@ -152,6 +153,9 @@ def main():
             print('Can not read filler duration')
             sys.exit(1)
 
+    hours, minutes, seconds = day_start.split(':')
+    day_start_padding = timedelta(hours = int(hours), minutes = int(minutes), seconds = int(seconds))
+    
     for _date in daterange():
         counter = 0
         loop = True
@@ -168,9 +172,19 @@ def main():
             for ext in extensions:
                 store.extend(glob(os.path.join(source, '**', f'*{ext}'), recursive=True))
         else :
-            store.extend(line.strip() for line in open(source, "r"))
+            with open(source, "r") as f:
+                line = f.readline()
+
+                while line :
+                    line = line.strip()
+
+                    if not line.startswith('#') :
+                        store.append(line)
+                    line = f.readline()
 
         shortest = 7200
+
+        start_time = datetime.strptime(_date, "%Y-%m-%d") + day_start_padding
 
         while loop:
             random.shuffle(store)
@@ -193,8 +207,11 @@ def main():
                     'out': duration,
                     'duration': duration,
                     'category': ct,
-                    'source': clip
+                    'source': clip,
+                    'start_time': start_time.strftime("%Y-%m-%d %H:%M:%S")
                 }
+
+                start_time = start_time + timedelta(seconds = duration)
 
                 if length_sec > counter + duration + filler_duration:
                     counter += duration
